@@ -19,6 +19,17 @@ func TestGitRoot(t *testing.T) {
 	if err := exec.Command("git", "init", tmpDir).Run(); err != nil {
 		t.Fatalf("git init: %v", err)
 	}
+	if err := exec.Command(
+		"git", "-C", tmpDir, "config", "user.name", "tinker",
+	).Run(); err != nil {
+		t.Fatalf("git config user.name: %v", err)
+	}
+	if err := exec.Command(
+		"git", "-C", tmpDir, "config", "user.email",
+		"tinker@example.com",
+	).Run(); err != nil {
+		t.Fatalf("git config user.email: %v", err)
+	}
 
 	root, err := GitRoot(tmpDir)
 	if err != nil {
@@ -43,11 +54,24 @@ func TestIsAncestor(t *testing.T) {
 	if err := exec.Command("git", "-C", tmpDir, "add", ".").Run(); err != nil {
 		t.Fatalf("git add: %v", err)
 	}
-	if err := exec.Command("git", "-C", tmpDir, "commit", "-m", "initial").Run(); err != nil {
-		t.Fatalf("git commit: %v", err)
+	commitCmd := exec.Command(
+		"git", "-C", tmpDir,
+		"-c", "user.name=tinker",
+		"-c", "user.email=tinker@example.com",
+		"-c", "commit.gpgsign=false",
+		"-c", "core.hooksPath=.git/hooks",
+		"commit", "-m", "initial",
+	)
+	commitOut, err := commitCmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf(
+			"git commit: %v: %s",
+			err,
+			strings.TrimSpace(string(commitOut)),
+		)
 	}
 
-	_, err := IsAncestor(tmpDir, "abc123")
+	_, err = IsAncestor(tmpDir, "abc123")
 	if err == nil {
 		t.Error("expected error for invalid commit")
 	}
