@@ -67,7 +67,7 @@ internal/
 - **Global Config**: `~/.config/tinker/config.json`
 - **Project Config**: `~/.config/tinker/projects/<key>/config.json`
 
-Project key derived from git toplevel path using BLAKE3 hash.
+Project key derived from absolute path to git repo.
 
 ## Build
 
