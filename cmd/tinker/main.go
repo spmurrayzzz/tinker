@@ -90,37 +90,114 @@ var quickstartCmd = &cobra.Command{
 	Use:   "quickstart",
 	Short: "Print usage guide",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		fmt.Print(`tinker - Task workflow management
+		fmt.Print(`## Task Management with tinker
 
-Commands:
-  tinker init [--path <dir>]     Initialize project storage
-  tinker quickstart              Show this guide
-  tinker snapshot <name>         Save snapshot of all tasks
-  tinker restore <name>          Restore tasks from snapshot
-  tinker add-task <name> --description "<desc>" [--depends-on <ids>]
-  tinker list-tasks              List all tasks
-  tinker view-task <id>          Show task details
-  tinker update-task <id> --status <status> [--commit <hash>]
-  tinker delete-task <id>        Delete a task
-  tinker sync                    Reset completed tasks whose commit is not in HEAD
+tinker is a dependency-aware task manager designed for git-integrated workflows.
+Each git repository gets isolated storage, and completed tasks can be linked to
+commits for automatic reconciliation when history changes.
 
-Tags:
-  tinker add-tag <id> <tag>      Add tag to task
-  tinker remove-tag <id> <tag>   Remove tag from task
-  tinker set-tags <id> <t1> ...  Set all tags on task
-  tinker list-tags <id>          List tags for task
+### Why tinker?
 
-Archiving:
-  tinker archive <id>            Archive a task
-  tinker unarchive <id>          Restore archived task
+- Dependency-aware: Track blockers between tasks with cycle detection
+- Git-integrated: Link completed tasks to commits, sync resets orphaned work
+- Per-project: Isolated SQLite storage per git repository
+- Snapshots: Save and restore task state atomically
+- Tags: Flexible filtering with include/exclude expressions
 
-Filtering:
-  tinker list-tasks --status pending           # by status
-  tinker list-tasks --tags +feature,-wip       # by tag expression
-  tinker list-tasks --include-archived         # include archived
+### Quick Start
 
-Status values: pending, in_progress, completed
-Dependencies: comma-separated task IDs (e.g., --depends-on 1,2,3)
+Initialize in any git repository:
+  tinker init
+
+Create tasks with dependencies:
+  tinker add-task "Build login form" -d "Create React component"
+  tinker add-task "Add validation" -d "Email and password rules" --depends-on 1
+
+List and view tasks:
+  tinker list-tasks
+  tinker list-tasks --status pending
+  tinker view-task 1
+
+Update status and link to commits:
+  tinker update-task 1 --status in_progress
+  tinker update-task 1 --status completed --commit abc123f
+
+### Task Status Values
+
+- pending      - Work not yet started
+- in_progress  - Currently being worked on
+- completed    - Finished (optionally linked to a commit)
+
+### Working with Dependencies
+
+Tasks can depend on other tasks. A task with unfinished dependencies cannot
+be meaningfully completed until its blockers are resolved.
+
+  tinker add-task "Deploy" -d "Ship to prod" --depends-on 1,2,3
+
+Dependencies prevent deletion of tasks that other tasks depend on.
+Cycle detection prevents circular dependency chains.
+
+### Tags and Filtering
+
+Add tags to organize tasks:
+  tinker add-tag 1 feature
+  tinker add-tag 1 priority-high
+  tinker set-tags 1 backend api v2
+
+Filter with tag expressions (+ to include, - to exclude):
+  tinker list-tasks --tags +feature           # must have 'feature'
+  tinker list-tasks --tags +backend,-wip      # backend but not wip
+  tinker list-tasks --tags +api,+v2           # must have both
+
+### Archiving Completed Work
+
+Archive tasks to hide them from default listings:
+  tinker archive 1
+  tinker archive --all                        # archive all completed
+  tinker archive --all --tags +feature        # only completed features
+  tinker list-tasks --include-archived        # show archived tasks
+  tinker unarchive 1                          # restore if needed
+
+### Git Sync
+
+When you rebase, reset, or otherwise change git history, completed tasks
+linked to orphaned commits can be automatically reset to pending:
+  tinker sync
+
+This checks each completed task's commit hash against current HEAD ancestry.
+
+### Snapshots
+
+Save and restore complete task state:
+  tinker snapshot before-refactor
+  tinker restore before-refactor
+
+Snapshots are atomic JSON files stored per-project.
+
+### Workflow for AI Agents
+
+1. Check pending work:       tinker list-tasks --status pending
+2. Claim a task:             tinker update-task <id> --status in_progress
+3. Work on it:               Implement, test, document
+4. Discover blockers?        Create dependent task with --depends-on
+5. Commit your changes:      git add && git commit
+6. Complete with commit:     tinker update-task <id> --status completed -c <hash>
+7. Archive when done:        tinker archive <id>
+
+### Storage Locations
+
+- Data:     ~/.local/share/tinker/projects/<key>/tasks.db
+- Snapshots: ~/.local/share/tinker/projects/<key>/snapshots/
+- Config:   ~/.config/tinker/
+
+Each git repository is identified by a unique project key derived from its path.
+
+### Shell Completion
+
+  tinker completion bash > /etc/bash_completion.d/tinker
+  tinker completion zsh > "${fpath[1]}/_tinker"
+  tinker completion fish > ~/.config/fish/completions/tinker.fish
 `)
 		return nil
 	},
