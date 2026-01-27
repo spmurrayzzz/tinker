@@ -388,6 +388,105 @@ var syncCmd = &cobra.Command{
 	},
 }
 
+const bashCompletionScript = `# tinker bash completion
+__tinker_init_completion()
+{
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+    words=("${COMP_WORDS[@]}")
+    cword="$COMP_CWORD"
+}
+
+__tinker_get_completions()
+{
+    local requestComp out lines line args cur_word
+    cur_word="${words[${#words[@]}-1]}"
+    args=("${words[@]:1}")
+    requestComp="${words[0]} __complete ${args[*]}"
+    if [[ -z "$cur_word" ]]; then
+        requestComp="${requestComp} ''"
+    fi
+    out=$(eval "$requestComp" 2>/dev/null)
+    lines=()
+    while IFS= read line; do
+        lines+=("$line")
+    done <<< "$out"
+    for ((i=0; i<${#lines[@]}-1; i++)); do
+        echo "${lines[$i]%%	*}"
+    done
+}
+
+__tinker_handle_completion()
+{
+    local out
+    out=$(__tinker_get_completions)
+    while IFS= read -r comp; do
+        COMPREPLY+=("$comp")
+    done <<< "$out"
+}
+
+__start_tinker()
+{
+    __tinker_init_completion
+    __tinker_handle_completion
+}
+
+complete -F __start_tinker tinker
+`
+
+var completionCmd = &cobra.Command{
+	Use:   "completion [bash|zsh|fish|powershell]",
+	Short: "Generate completion script",
+	Long: `To load completions:
+
+Bash:
+
+  $ source <(tinker completion bash)
+
+  # To load completions for each session, execute once:
+  # Linux:
+  $ tinker completion bash > /etc/bash_completion.d/tinker
+  # macOS:
+  $ tinker completion bash > /usr/local/etc/bash_completion.d/tinker
+
+Zsh:
+
+  # If shell completion is not already enabled in your environment,
+  # you will need to enable it.  You can execute the following once:
+
+  $ echo "autoload -U compinit; compinit" >> ~/.zshrc
+
+  # To load completions for each session, execute once:
+  $ tinker completion zsh > "${fpath[1]}/_tinker"
+
+  # You will need to start a new shell for this to take effect.
+
+Fish:
+
+  $ tinker completion fish | source
+
+  # To load completions for each session, execute once:
+  $ tinker completion fish > ~/.config/fish/completions/tinker.fish
+`,
+	DisableFlagsInUseLine: true,
+	ValidArgs:             []string{"bash", "zsh", "fish", "powershell"},
+	Args:                  cobra.ExactValidArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		switch args[0] {
+		case "bash":
+			fmt.Print(bashCompletionScript)
+		case "zsh":
+			return rootCmd.GenZshCompletion(os.Stdout)
+		case "fish":
+			return rootCmd.GenFishCompletion(os.Stdout, true)
+		case "powershell":
+			return rootCmd.GenPowerShellCompletionWithDesc(os.Stdout)
+		}
+		return nil
+	},
+}
+
 func init() {
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(quickstartCmd)
@@ -399,6 +498,7 @@ func init() {
 	rootCmd.AddCommand(snapshotCmd)
 	rootCmd.AddCommand(restoreCmd)
 	rootCmd.AddCommand(syncCmd)
+	rootCmd.AddCommand(completionCmd)
 
 	initCmd.Flags().StringP("path", "p", "", "Directory to initialize (defaults to current directory)")
 
