@@ -1,0 +1,137 @@
+package commands
+
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
+
+func TestParseTagExpression(t *testing.T) {
+	tests := []struct {
+		name    string
+		expr    string
+		include []string
+		exclude []string
+		wantErr bool
+	}{
+		{"empty", "", nil, nil, false},
+		{"single include", "+feature", []string{"feature"}, nil, false},
+		{"single exclude", "-wip", nil, []string{"wip"}, false},
+		{"no prefix treated as include", "feature", []string{"feature"}, nil, false},
+		{"mixed", "+a,-b,c", []string{"a", "c"}, []string{"b"}, false},
+		{"empty include tag", "+", nil, nil, true},
+		{"empty exclude tag", "-", nil, nil, true},
+		{"multiple includes", "+a,+b,+c", []string{"a", "b", "c"}, nil, false},
+		{"multiple excludes", "-a,-b,-c", nil, []string{"a", "b", "c"}, false},
+		{"whitespace handling", " +a , -b , c ", []string{"a", "c"}, []string{"b"}, false},
+		{"empty parts skipped", "+a,,+b", []string{"a", "b"}, nil, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			inc, exc, err := ParseTagExpression(tt.expr)
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, tt.include, inc)
+			assert.Equal(t, tt.exclude, exc)
+		})
+	}
+}
+
+func TestParseTaskID(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    int64
+		wantErr bool
+	}{
+		{"simple", "123", 123, false},
+		{"zero padded", "00001", 1, false},
+		{"large", "99999", 99999, false},
+		{"negative", "-1", -1, false},
+		{"invalid", "abc", 0, true},
+		{"empty", "", 0, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ParseTaskID(tt.input)
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestParseDependsOn(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    []int64
+		wantErr bool
+	}{
+		{"empty", "", nil, false},
+		{"single", "1", []int64{1}, false},
+		{"multiple", "1,2,3", []int64{1, 2, 3}, false},
+		{"zero padded", "001,002", []int64{1, 2}, false},
+		{"invalid", "1,abc,3", nil, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ParseDependsOn(tt.input)
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestFormatTime(t *testing.T) {
+	ts := int64(1704067200)
+	formatted := FormatTime(ts)
+	assert.Equal(t, "2024-01-01T00:00:00Z", formatted)
+}
+
+func TestFormatTaskID(t *testing.T) {
+	tests := []struct {
+		id    int64
+		width int
+		want  string
+	}{
+		{1, 5, "1"},
+		{123, 5, "123"},
+		{99999, 5, "99999"},
+	}
+
+	for _, tt := range tests {
+		got := FormatTaskID(tt.id, tt.width)
+		assert.Equal(t, tt.want, got)
+	}
+}
+
+func TestSplitComma(t *testing.T) {
+	tests := []struct {
+		input string
+		want  []string
+	}{
+		{"", nil},
+		{"a", []string{"a"}},
+		{"a,b,c", []string{"a", "b", "c"}},
+		{"a,,b", []string{"a", "", "b"}},
+	}
+
+	for _, tt := range tests {
+		got := splitComma(tt.input)
+		assert.Equal(t, tt.want, got)
+	}
+}

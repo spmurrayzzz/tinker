@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"tinker/internal/config"
@@ -193,6 +194,8 @@ func SnapshotTasks(ctx *ProjectContext, name string) error {
 			Name:         t.Name,
 			Description:  t.Description,
 			Status:       string(t.Status),
+			Tags:         t.Tags,
+			Archived:     t.Archived,
 			Dependencies: t.Dependencies,
 			CommitHash:   t.CommitHash,
 			CreatedAt:    fromUnix(t.CreatedAt),
@@ -221,12 +224,18 @@ func RestoreSnapshot(ctx *ProjectContext, name string) error {
 
 	tasks := make([]model.TaskWithDeps, len(snap.Tasks))
 	for i, s := range snap.Tasks {
+		tags := s.Tags
+		if tags == nil {
+			tags = []string{}
+		}
 		tasks[i] = model.TaskWithDeps{
 			Task: model.Task{
 				ID:          s.ID,
 				Name:        s.Name,
 				Description: s.Description,
 				Status:      model.TaskStatus(s.Status),
+				Tags:        tags,
+				Archived:    s.Archived,
 				CommitHash:  s.CommitHash,
 				CreatedAt:   toUnix(s.CreatedAt),
 				UpdatedAt:   toUnix(s.UpdatedAt),
@@ -240,4 +249,31 @@ func RestoreSnapshot(ctx *ProjectContext, name string) error {
 	}
 
 	return nil
+}
+
+func ParseTagExpression(expr string) (include, exclude []string, err error) {
+	if expr == "" {
+		return nil, nil, nil
+	}
+	parts := splitComma(expr)
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		if strings.HasPrefix(p, "-") {
+			tag := strings.TrimPrefix(p, "-")
+			if tag == "" {
+				return nil, nil, fmt.Errorf("empty exclude tag")
+			}
+			exclude = append(exclude, tag)
+		} else {
+			tag := strings.TrimPrefix(p, "+")
+			if tag == "" {
+				return nil, nil, fmt.Errorf("empty include tag")
+			}
+			include = append(include, tag)
+		}
+	}
+	return include, exclude, nil
 }
