@@ -754,7 +754,7 @@ func init() {
 
 	listTasksCmd.Flags().String("status", "", "Filter by status (pending, in_progress, completed)")
 	listTasksCmd.Flags().String("tags", "", "Tag expression: +tag (must have), -tag (must not have)")
-	listTasksCmd.Flags().Bool("include-archived", false, "Include archived tasks")
+	listTasksCmd.Flags().BoolP("include-archived", "a", false, "Include archived tasks")
 
 	updateTaskCmd.Flags().StringP("status", "s", "", "Task status (pending, in_progress, completed)")
 	updateTaskCmd.Flags().StringP("commit", "c", "", "Commit hash")
