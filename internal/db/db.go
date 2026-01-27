@@ -12,7 +12,7 @@ import (
 	"tinker/internal/xdg"
 )
 
-const SchemaVersion = 1
+const SchemaVersion = 2
 
 type DB struct {
 	*sql.DB
@@ -89,6 +89,10 @@ func (d *DB) initSchema() error {
 		if err := tx.Commit(); err != nil {
 			return fmt.Errorf("commit tx: %w", err)
 		}
+	} else if version == 1 {
+		if err := d.migrateV1ToV2(); err != nil {
+			return fmt.Errorf("migrate v1 to v2: %w", err)
+		}
 	} else if version != SchemaVersion {
 		return fmt.Errorf("unsupported schema version: %d (expected %d)", version, SchemaVersion)
 	}
@@ -98,6 +102,22 @@ func (d *DB) initSchema() error {
 		return fmt.Errorf("enable foreign keys: %w", err)
 	}
 
+	return nil
+}
+
+func (d *DB) migrateV1ToV2() error {
+	migrations := []string{
+		`ALTER TABLE tasks ADD COLUMN archived INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE tasks ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'`,
+		`CREATE INDEX IF NOT EXISTS idx_tasks_archived ON tasks(archived)`,
+		fmt.Sprintf("PRAGMA user_version = %d", SchemaVersion),
+	}
+
+	for _, m := range migrations {
+		if _, err := d.Exec(m); err != nil {
+			return fmt.Errorf("migration failed: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -113,6 +133,8 @@ func (d *DB) createSchema() error {
 			description TEXT NOT NULL,
 			status TEXT NOT NULL,
 			commit_hash TEXT NULL,
+			archived INTEGER NOT NULL DEFAULT 0,
+			tags TEXT NOT NULL DEFAULT '[]',
 			created_at INTEGER NOT NULL,
 			updated_at INTEGER NOT NULL
 		)`,
@@ -125,6 +147,7 @@ func (d *DB) createSchema() error {
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)`,
 		`CREATE INDEX IF NOT EXISTS idx_tasks_commit ON tasks(commit_hash)`,
+		`CREATE INDEX IF NOT EXISTS idx_tasks_archived ON tasks(archived)`,
 		`CREATE INDEX IF NOT EXISTS idx_deps_depends_on ON task_deps(depends_on)`,
 	}
 
@@ -147,8 +170,9 @@ func (d *DB) InsertTask(name, description string, status model.TaskStatus, depen
 	now := time.Now().Unix()
 	var id int64
 	err = tx.QueryRow(`
-		INSERT INTO tasks (name, description, status, commit_hash, created_at, updated_at)
-		VALUES (?, ?, ?, NULL, ?, ?)
+		INSERT INTO tasks (name, description, status, commit_hash, archived, tags,
+			created_at, updated_at)
+		VALUES (?, ?, ?, NULL, 0, '[]', ?, ?)
 		RETURNING id
 	`, name, description, status, now, now).Scan(&id)
 	if err != nil {
@@ -172,7 +196,8 @@ func (d *DB) InsertTask(name, description string, status model.TaskStatus, depen
 
 func (d *DB) ListTasks() ([]model.Task, error) {
 	rows, err := d.Query(`
-		SELECT id, name, description, status, commit_hash, created_at, updated_at
+		SELECT id, name, description, status, commit_hash, archived, tags,
+			created_at, updated_at
 		FROM tasks
 		ORDER BY id ASC
 	`)
@@ -185,12 +210,22 @@ func (d *DB) ListTasks() ([]model.Task, error) {
 	for rows.Next() {
 		var t model.Task
 		var commitHash sql.NullString
-		if err := rows.Scan(&t.ID, &t.Name, &t.Description, &t.Status, &commitHash, &t.CreatedAt, &t.UpdatedAt); err != nil {
+		var archived int
+		var tagsJSON string
+		err := rows.Scan(&t.ID, &t.Name, &t.Description, &t.Status, &commitHash,
+			&archived, &tagsJSON, &t.CreatedAt, &t.UpdatedAt)
+		if err != nil {
 			return nil, fmt.Errorf("scan task: %w", err)
 		}
 		if commitHash.Valid {
 			t.CommitHash = &commitHash.String
 		}
+		t.Archived = archived != 0
+		tags, err := TagsFromJSON(tagsJSON)
+		if err != nil {
+			return nil, fmt.Errorf("parse tags: %w", err)
+		}
+		t.Tags = tags
 		tasks = append(tasks, t)
 	}
 
@@ -208,11 +243,15 @@ func (d *DB) ListTasks() ([]model.Task, error) {
 func (d *DB) GetTask(id int64) (*model.Task, error) {
 	var t model.Task
 	var commitHash sql.NullString
+	var archived int
+	var tagsJSON string
 	err := d.QueryRow(`
-		SELECT id, name, description, status, commit_hash, created_at, updated_at
+		SELECT id, name, description, status, commit_hash, archived, tags,
+			created_at, updated_at
 		FROM tasks
 		WHERE id = ?
-	`, id).Scan(&t.ID, &t.Name, &t.Description, &t.Status, &commitHash, &t.CreatedAt, &t.UpdatedAt)
+	`, id).Scan(&t.ID, &t.Name, &t.Description, &t.Status, &commitHash,
+		&archived, &tagsJSON, &t.CreatedAt, &t.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -222,6 +261,12 @@ func (d *DB) GetTask(id int64) (*model.Task, error) {
 	if commitHash.Valid {
 		t.CommitHash = &commitHash.String
 	}
+	t.Archived = archived != 0
+	tags, err := TagsFromJSON(tagsJSON)
+	if err != nil {
+		return nil, fmt.Errorf("parse tags: %w", err)
+	}
+	t.Tags = tags
 
 	deps, err := d.getDependencies(id)
 	if err != nil {
@@ -317,7 +362,8 @@ func (d *DB) TaskExists(id int64) (bool, error) {
 
 func (d *DB) GetCompletedTasksWithCommit() ([]model.Task, error) {
 	rows, err := d.Query(`
-		SELECT id, name, description, status, commit_hash, created_at, updated_at
+		SELECT id, name, description, status, commit_hash, archived, tags,
+			created_at, updated_at
 		FROM tasks
 		WHERE status = 'completed' AND commit_hash IS NOT NULL
 		ORDER BY id ASC
@@ -331,12 +377,22 @@ func (d *DB) GetCompletedTasksWithCommit() ([]model.Task, error) {
 	for rows.Next() {
 		var t model.Task
 		var commitHash sql.NullString
-		if err := rows.Scan(&t.ID, &t.Name, &t.Description, &t.Status, &commitHash, &t.CreatedAt, &t.UpdatedAt); err != nil {
+		var archived int
+		var tagsJSON string
+		err := rows.Scan(&t.ID, &t.Name, &t.Description, &t.Status, &commitHash,
+			&archived, &tagsJSON, &t.CreatedAt, &t.UpdatedAt)
+		if err != nil {
 			return nil, fmt.Errorf("scan task: %w", err)
 		}
 		if commitHash.Valid {
 			t.CommitHash = &commitHash.String
 		}
+		t.Archived = archived != 0
+		tags, err := TagsFromJSON(tagsJSON)
+		if err != nil {
+			return nil, fmt.Errorf("parse tags: %w", err)
+		}
+		t.Tags = tags
 		tasks = append(tasks, t)
 	}
 	return tasks, nil
@@ -381,10 +437,20 @@ func (d *DB) RestoreSnapshot(tasks []model.TaskWithDeps) error {
 			maxID = t.ID
 		}
 		validIDs[t.ID] = true
+		archivedInt := 0
+		if t.Archived {
+			archivedInt = 1
+		}
+		tagsJSON, err := TagsToJSON(t.Tags)
+		if err != nil {
+			return fmt.Errorf("serialize tags for task %d: %w", t.ID, err)
+		}
 		if _, err := tx.Exec(`
-			INSERT INTO tasks (id, name, description, status, commit_hash, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?)
-		`, t.ID, t.Name, t.Description, t.Status, t.CommitHash, t.CreatedAt, t.UpdatedAt); err != nil {
+			INSERT INTO tasks (id, name, description, status, commit_hash, archived,
+				tags, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`, t.ID, t.Name, t.Description, t.Status, t.CommitHash, archivedInt,
+			tagsJSON, t.CreatedAt, t.UpdatedAt); err != nil {
 			return fmt.Errorf("insert task %d: %w", t.ID, err)
 		}
 	}

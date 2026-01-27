@@ -34,6 +34,8 @@ type Task struct {
 	Name         string     `json:"name"`
 	Description  string     `json:"description"`
 	Status       TaskStatus `json:"status"`
+	Tags         []string   `json:"tags,omitempty"`
+	Archived     bool       `json:"archived"`
 	CommitHash   *string    `json:"commit_hash,omitempty"`
 	CreatedAt    int64      `json:"created_at"`
 	UpdatedAt    int64      `json:"updated_at"`
