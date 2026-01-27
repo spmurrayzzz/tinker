@@ -104,6 +104,21 @@ Commands:
   tinker delete-task <id>        Delete a task
   tinker sync                    Reset completed tasks whose commit is not in HEAD
 
+Tags:
+  tinker add-tag <id> <tag>      Add tag to task
+  tinker remove-tag <id> <tag>   Remove tag from task
+  tinker set-tags <id> <t1> ...  Set all tags on task
+  tinker list-tags <id>          List tags for task
+
+Archiving:
+  tinker archive <id>            Archive a task
+  tinker unarchive <id>          Restore archived task
+
+Filtering:
+  tinker list-tasks --status pending           # by status
+  tinker list-tasks --tags +feature,-wip       # by tag expression
+  tinker list-tasks --include-archived         # include archived
+
 Status values: pending, in_progress, completed
 Dependencies: comma-separated task IDs (e.g., --depends-on 1,2,3)
 `)
@@ -170,7 +185,32 @@ var listTasksCmd = &cobra.Command{
 		}
 		defer ctx.DB.Close()
 
-		tasks, err := ctx.DB.ListTasks()
+		statusStr, _ := cmd.Flags().GetString("status")
+		tagsExpr, _ := cmd.Flags().GetString("tags")
+		includeArchived, _ := cmd.Flags().GetBool("include-archived")
+
+		filter := db.TaskFilter{
+			IncludeArchived: includeArchived,
+		}
+
+		if statusStr != "" {
+			status, err := model.ParseTaskStatus(statusStr)
+			if err != nil {
+				return fmt.Errorf("invalid status: %w", err)
+			}
+			filter.Status = &status
+		}
+
+		if tagsExpr != "" {
+			include, exclude, err := commands.ParseTagExpression(tagsExpr)
+			if err != nil {
+				return fmt.Errorf("invalid tag expression: %w", err)
+			}
+			filter.IncludeTags = include
+			filter.ExcludeTags = exclude
+		}
+
+		tasks, err := ctx.DB.ListTasksFiltered(filter)
 		if err != nil {
 			return fmt.Errorf("list tasks: %w", err)
 		}
@@ -224,6 +264,15 @@ var viewTaskCmd = &cobra.Command{
 		fmt.Printf("commit_hash: ")
 		if t.CommitHash != nil {
 			fmt.Print(*t.CommitHash)
+		}
+		fmt.Println()
+		fmt.Printf("archived: %t\n", t.Archived)
+		fmt.Printf("tags: ")
+		for i, tag := range t.Tags {
+			if i > 0 {
+				fmt.Print(",")
+			}
+			fmt.Print(tag)
 		}
 		fmt.Println()
 		fmt.Printf("created_at: %s\n", formatTime(t.CreatedAt))
@@ -305,6 +354,169 @@ var deleteTaskCmd = &cobra.Command{
 			return fmt.Errorf("delete task: %w", err)
 		}
 
+		return nil
+	},
+}
+
+var addTagCmd = &cobra.Command{
+	Use:   "add-tag <task-id> <tag>",
+	Short: "Add tag to task",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if len(args) < 2 {
+			return fmt.Errorf("usage: add-tag <task-id> <tag>")
+		}
+		id, err := commands.ParseTaskID(args[0])
+		if err != nil {
+			return fmt.Errorf("invalid task id: %w", err)
+		}
+		tag := args[1]
+		if tag == "" {
+			return fmt.Errorf("tag cannot be empty")
+		}
+
+		ctx, err := commands.ResolveProject()
+		if err != nil {
+			return err
+		}
+		defer ctx.DB.Close()
+
+		if err := ctx.DB.AddTag(id, tag); err != nil {
+			return fmt.Errorf("add tag: %w", err)
+		}
+		return nil
+	},
+}
+
+var removeTagCmd = &cobra.Command{
+	Use:   "remove-tag <task-id> <tag>",
+	Short: "Remove tag from task",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if len(args) < 2 {
+			return fmt.Errorf("usage: remove-tag <task-id> <tag>")
+		}
+		id, err := commands.ParseTaskID(args[0])
+		if err != nil {
+			return fmt.Errorf("invalid task id: %w", err)
+		}
+		tag := args[1]
+
+		ctx, err := commands.ResolveProject()
+		if err != nil {
+			return err
+		}
+		defer ctx.DB.Close()
+
+		if err := ctx.DB.RemoveTag(id, tag); err != nil {
+			return fmt.Errorf("remove tag: %w", err)
+		}
+		return nil
+	},
+}
+
+var listTagsCmd = &cobra.Command{
+	Use:   "list-tags <task-id>",
+	Short: "List all tags for task",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if len(args) < 1 {
+			return fmt.Errorf("missing task id")
+		}
+		id, err := commands.ParseTaskID(args[0])
+		if err != nil {
+			return fmt.Errorf("invalid task id: %w", err)
+		}
+
+		ctx, err := commands.ResolveProject()
+		if err != nil {
+			return err
+		}
+		defer ctx.DB.Close()
+
+		tags, err := ctx.DB.GetTaskTags(id)
+		if err != nil {
+			return fmt.Errorf("get tags: %w", err)
+		}
+		if tags == nil {
+			return fmt.Errorf("task not found: %d", id)
+		}
+		for _, tag := range tags {
+			fmt.Println(tag)
+		}
+		return nil
+	},
+}
+
+var setTagsCmd = &cobra.Command{
+	Use:   "set-tags <task-id> <tag1> [tag2]...",
+	Short: "Replace all tags on task",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if len(args) < 1 {
+			return fmt.Errorf("missing task id")
+		}
+		id, err := commands.ParseTaskID(args[0])
+		if err != nil {
+			return fmt.Errorf("invalid task id: %w", err)
+		}
+		tags := args[1:]
+
+		ctx, err := commands.ResolveProject()
+		if err != nil {
+			return err
+		}
+		defer ctx.DB.Close()
+
+		if err := ctx.DB.SetTaskTags(id, tags); err != nil {
+			return fmt.Errorf("set tags: %w", err)
+		}
+		return nil
+	},
+}
+
+var archiveCmd = &cobra.Command{
+	Use:   "archive <task-id>",
+	Short: "Archive a task",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if len(args) < 1 {
+			return fmt.Errorf("missing task id")
+		}
+		id, err := commands.ParseTaskID(args[0])
+		if err != nil {
+			return fmt.Errorf("invalid task id: %w", err)
+		}
+
+		ctx, err := commands.ResolveProject()
+		if err != nil {
+			return err
+		}
+		defer ctx.DB.Close()
+
+		if err := ctx.DB.ArchiveTask(id); err != nil {
+			return fmt.Errorf("archive: %w", err)
+		}
+		return nil
+	},
+}
+
+var unarchiveCmd = &cobra.Command{
+	Use:   "unarchive <task-id>",
+	Short: "Restore archived task",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if len(args) < 1 {
+			return fmt.Errorf("missing task id")
+		}
+		id, err := commands.ParseTaskID(args[0])
+		if err != nil {
+			return fmt.Errorf("invalid task id: %w", err)
+		}
+
+		ctx, err := commands.ResolveProject()
+		if err != nil {
+			return err
+		}
+		defer ctx.DB.Close()
+
+		if err := ctx.DB.UnarchiveTask(id); err != nil {
+			return fmt.Errorf("unarchive: %w", err)
+		}
 		return nil
 	},
 }
@@ -495,6 +707,12 @@ func init() {
 	rootCmd.AddCommand(viewTaskCmd)
 	rootCmd.AddCommand(updateTaskCmd)
 	rootCmd.AddCommand(deleteTaskCmd)
+	rootCmd.AddCommand(addTagCmd)
+	rootCmd.AddCommand(removeTagCmd)
+	rootCmd.AddCommand(listTagsCmd)
+	rootCmd.AddCommand(setTagsCmd)
+	rootCmd.AddCommand(archiveCmd)
+	rootCmd.AddCommand(unarchiveCmd)
 	rootCmd.AddCommand(snapshotCmd)
 	rootCmd.AddCommand(restoreCmd)
 	rootCmd.AddCommand(syncCmd)
@@ -504,6 +722,10 @@ func init() {
 
 	addTaskCmd.Flags().StringP("description", "d", "", "Task description")
 	addTaskCmd.Flags().StringSliceP("depends-on", "D", []string{}, "Task IDs this task depends on")
+
+	listTasksCmd.Flags().String("status", "", "Filter by status (pending, in_progress, completed)")
+	listTasksCmd.Flags().String("tags", "", "Tag expression: +tag (must have), -tag (must not have)")
+	listTasksCmd.Flags().Bool("include-archived", false, "Include archived tasks")
 
 	updateTaskCmd.Flags().StringP("status", "s", "", "Task status (pending, in_progress, completed)")
 	updateTaskCmd.Flags().StringP("commit", "c", "", "Commit hash")
