@@ -472,22 +472,51 @@ var setTagsCmd = &cobra.Command{
 }
 
 var archiveCmd = &cobra.Command{
-	Use:   "archive <task-id>",
+	Use:   "archive [task-id]",
 	Short: "Archive a task",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if len(args) < 1 {
-			return fmt.Errorf("missing task id")
-		}
-		id, err := commands.ParseTaskID(args[0])
-		if err != nil {
-			return fmt.Errorf("invalid task id: %w", err)
-		}
+		all, _ := cmd.Flags().GetBool("all")
+		tagsExpr, _ := cmd.Flags().GetString("tags")
 
 		ctx, err := commands.ResolveProject()
 		if err != nil {
 			return err
 		}
 		defer ctx.DB.Close()
+
+		if all {
+			if len(args) > 0 {
+				return fmt.Errorf("--all cannot be used with a task-id argument")
+			}
+			status := model.StatusCompleted
+			filter := db.TaskFilter{Status: &status}
+			if tagsExpr != "" {
+				include, exclude, err := commands.ParseTagExpression(tagsExpr)
+				if err != nil {
+					return fmt.Errorf("invalid tag expression: %w", err)
+				}
+				filter.IncludeTags = include
+				filter.ExcludeTags = exclude
+			}
+			count, err := ctx.DB.BulkArchive(filter)
+			if err != nil {
+				return fmt.Errorf("archive: %w", err)
+			}
+			fmt.Printf("Archived %d completed task(s)\n", count)
+			return nil
+		}
+
+		if tagsExpr != "" {
+			return fmt.Errorf("--tags requires --all")
+		}
+
+		if len(args) < 1 {
+			return fmt.Errorf("missing task id (use --all to archive all completed tasks)")
+		}
+		id, err := commands.ParseTaskID(args[0])
+		if err != nil {
+			return fmt.Errorf("invalid task id: %w", err)
+		}
 
 		if err := ctx.DB.ArchiveTask(id); err != nil {
 			return fmt.Errorf("archive: %w", err)
@@ -729,6 +758,9 @@ func init() {
 
 	updateTaskCmd.Flags().StringP("status", "s", "", "Task status (pending, in_progress, completed)")
 	updateTaskCmd.Flags().StringP("commit", "c", "", "Commit hash")
+
+	archiveCmd.Flags().Bool("all", false, "Archive all completed tasks")
+	archiveCmd.Flags().String("tags", "", "Tag expression for --all: +tag (must have), -tag (must not have)")
 }
 
 func formatTime(ts int64) string {
