@@ -38,6 +38,7 @@ tinker list-tasks
 | `tinker snapshot <name>` | Save task state to JSON |
 | `tinker restore <name>` | Restore from snapshot |
 | `tinker sync` | Reconcile with git history |
+| `tinker reset [--force] [--keep-snapshots]` | Reset project (delete all tasks) |
 | `tinker completion [bash|zsh|fish|powershell]` | Generate shell completions |
 
 Status values: `pending`, `in_progress`, `completed`.

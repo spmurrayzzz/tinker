@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -805,6 +807,75 @@ Fish:
 	},
 }
 
+var resetCmd = &cobra.Command{
+	Use:   "reset",
+	Short: "Reset project - delete all tasks and reinitialize",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		force, err := cmd.Flags().GetBool("force")
+		if err != nil {
+			return fmt.Errorf("reset: get force flag: %w", err)
+		}
+		keepSnapshots, err := cmd.Flags().GetBool("keep-snapshots")
+		if err != nil {
+			return fmt.Errorf("reset: get keep-snapshots flag: %w", err)
+		}
+
+		ctx, err := commands.ResolveProject()
+		if err != nil {
+			return fmt.Errorf("reset: resolve project: %w", err)
+		}
+		ctx.DB.Close()
+
+		if !force {
+			fmt.Print("This will delete all tasks and cannot be undone. Continue? [y/N]: ")
+			reader := bufio.NewReader(os.Stdin)
+			response, err := reader.ReadString('\n')
+			if err != nil {
+				return fmt.Errorf("reset: read confirmation: %w", err)
+			}
+			response = strings.TrimSpace(strings.ToLower(response))
+			if response != "y" && response != "yes" {
+				fmt.Println("Aborted.")
+				return nil
+			}
+		}
+
+		dbPath := filepath.Join(xdg.ProjectDataDir(ctx.ProjectKey), "tasks.db")
+		for _, ext := range []string{"", "-wal", "-shm"} {
+			path := dbPath + ext
+			if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+				return fmt.Errorf("reset: remove database%s: %w", ext, err)
+			}
+		}
+
+		if !keepSnapshots {
+			snapshotsDir := xdg.ProjectSnapshotsDir(ctx.ProjectKey)
+			entries, err := os.ReadDir(snapshotsDir)
+			if err != nil && !os.IsNotExist(err) {
+				return fmt.Errorf("reset: read snapshots directory: %w", err)
+			}
+			for _, entry := range entries {
+				path := filepath.Join(snapshotsDir, entry.Name())
+				if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+					return fmt.Errorf("reset: remove snapshot %s: %w", entry.Name(), err)
+				}
+			}
+			os.Remove(snapshotsDir)
+		}
+
+		newDB, err := db.Open(ctx.ProjectKey)
+		if err != nil {
+			return fmt.Errorf("reset: reinitialize database: %w", err)
+		}
+		if err := newDB.Close(); err != nil {
+			return fmt.Errorf("reset: close reinitialized database: %w", err)
+		}
+
+		fmt.Println("Project reset successfully.")
+		return nil
+	},
+}
+
 func init() {
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(quickstartCmd)
@@ -822,6 +893,7 @@ func init() {
 	rootCmd.AddCommand(snapshotCmd)
 	rootCmd.AddCommand(restoreCmd)
 	rootCmd.AddCommand(syncCmd)
+	rootCmd.AddCommand(resetCmd)
 	rootCmd.AddCommand(completionCmd)
 
 	initCmd.Flags().StringP("path", "p", "", "Directory to initialize (defaults to current directory)")
@@ -838,6 +910,9 @@ func init() {
 
 	archiveCmd.Flags().Bool("all", false, "Archive all completed tasks")
 	archiveCmd.Flags().String("tags", "", "Tag expression for --all: +tag (must have), -tag (must not have)")
+
+	resetCmd.Flags().BoolP("force", "f", false, "Skip confirmation prompt")
+	resetCmd.Flags().Bool("keep-snapshots", false, "Preserve snapshot files")
 }
 
 func formatTime(ts int64) string {

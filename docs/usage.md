@@ -287,6 +287,23 @@ tinker restore before-refactor
 tinker sync
 ```
 
+## Resetting Project
+
+Delete all tasks and reinitialize with a fresh database:
+
+```bash
+# Reset with confirmation prompt
+tinker reset
+
+# Reset without confirmation
+tinker reset --force
+
+# Keep snapshots after reset
+tinker reset --force --keep-snapshots
+```
+
+**Warning**: This permanently deletes all tasks and cannot be undone. Snapshots are also deleted unless `--keep-snapshots` is specified. Global configuration (like `id_width`) is preserved.
+
 ## Shell Completions
 
 Generate shell completion scripts:
@@ -321,5 +338,6 @@ tinker completion fish | source
 | `tinker snapshot <name>` | Save task snapshot |
 | `tinker restore <name>` | Restore from snapshot |
 | `tinker sync` | Reconcile with git history |
+| `tinker reset` | Reset project (delete all tasks) |
 | `tinker quickstart` | Print usage guide |
 | `tinker completion` | Generate shell completions |
