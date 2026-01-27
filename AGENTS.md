@@ -85,9 +85,6 @@ make clean
 ├── Makefile                 # Build targets
 ├── go.mod                   # Module definition
 ├── go.sum                   # Dependency checksums
-├── BUGS.md                  # Bug report and fix documentation
-├── PLAN.md                  # Implementation plan (detailed)
-├── PROPOSAL.md              # Feature proposal
 ├── README.md                # User-facing documentation
 └── .gitignore               # Ignores: /tinker, tinker.exe
 ```
@@ -95,7 +92,7 @@ make clean
 ## Architecture
 
 ### Entry Point
-`cmd/tinker/main.go:18-433` - Contains all Cobra command definitions and the main CLI dispatcher.
+`cmd/tinker/main.go:18-865` - Contains all Cobra command definitions and the main CLI dispatcher.
 
 ### Storage Paths (XDG)
 - **Data**: `~/.local/share/tinker/projects/<project_key>/tasks.db`
@@ -106,7 +103,7 @@ make clean
 Project key is derived from git toplevel path: the absolute canonical path with `/` replaced by `-`, trimmed of leading/trailing dashes (e.g., `/Users/spmurray/src/tries/2026-01-23-tinker` becomes `--Users-spmurray-src-tries-2026-01-23-tinker`).
 
 ### SQLite Schema
-`internal/db/db.go:104-138` - Defines tables:
+`internal/db/db.go:124-161` - Defines tables:
 - `global_config` - Stores ID width for zero-padding
 - `tasks` - Task records with auto-increment IDs
 - `task_deps` - Join table for task dependencies with FK constraints
@@ -129,22 +126,20 @@ The `make validate` target runs the complete check sequence: `format` → `vet` 
 - **Git operations**: `internal/git/git.go`
 - **Project resolution**: `internal/commands/commands.go:ResolveProject()`
 - **Configuration**: `internal/config/config.go`
-- **Bug history**: `BUGS.md` contains detailed bug reports and fixes
-- **Implementation details**: `PLAN.md` contains comprehensive technical specifications
 
 ## Important Implementation Details
 
 1. **File locking**: Global config writes use advisory locking via `internal/xdg/xdg.go:69-84`. Always acquire lock before writing global config.
 
-2. **DB close behavior**: `DB.Close()` in `internal/db/db.go:417-423` runs `PRAGMA wal_checkpoint(TRUNCATE)` before closing to ensure clean shutdown.
+2. **DB close behavior**: `DB.Close()` in `internal/db/db.go:763-769` runs `PRAGMA wal_checkpoint(TRUNCATE)` before closing to ensure clean shutdown.
 
 3. **Task ID parsing**: `commands.ParseTaskID()` in `internal/commands/commands.go` accepts zero-padded IDs (e.g., "00001") and converts to int64.
 
 4. **Dependency validation**: `ValidateDependsOn()` checks for self-dependency, duplicate dependencies, and cycle detection before allowing insert.
 
-5. **Snapshot atomicity**: Snapshots use temp files + rename for atomic writes (see `internal/db/db.go:441-455`).
+5. **Snapshot atomicity**: Snapshots use temp files + rename for atomic writes (see `internal/db/db.go:787-797`).
 
-6. **Test isolation**: Tests use `t.TempDir()` and must restore environment variables (XDG paths) after completion (see `BUGS.md:173-231`).
+6. **Test isolation**: Tests use `t.TempDir()` and must restore environment variables (XDG paths) after completion.
 
 ## Environment Setup
 
@@ -165,7 +160,7 @@ CGO is enabled by default for `go-sqlite3`. On macOS, this requires Xcode comman
 
 ### Modifying Database Schema
 1. Update `internal/db/db.go:createSchema()` with new DDL
-2. Increment `SchemaVersion` constant (currently 1)
+2. Increment `SchemaVersion` constant (currently 2)
 3. Add migration logic in `initSchema()` if upgrading from previous versions
 4. Update `internal/db/db_test.go` if it exists
 5. Run `make test`
@@ -186,9 +181,7 @@ CGO is enabled by default for `go-sqlite3`. On macOS, this requires Xcode comman
 ## Documentation
 
 - **User-facing docs**: `README.md`
-- **Technical spec**: `PLAN.md`
-- **Bug history**: `BUGS.md`
-- **Feature proposal**: `PROPOSAL.md`
+- **Detailed usage guide**: `docs/usage.md`
 
 ## Trust This Guide
 

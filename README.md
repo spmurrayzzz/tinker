@@ -25,13 +25,20 @@ tinker list-tasks
 | `tinker init [--path <dir>]` | Initialize project storage |
 | `tinker quickstart` | Print usage guide |
 | `tinker add-task <name> [--description] [--depends-on <ids>]` | Add a new task |
-| `tinker list-tasks` | List all tasks |
+| `tinker list-tasks [--status <status>] [--tags <expr>] [--include-archived]` | List all tasks |
 | `tinker view-task <id>` | Show task details |
 | `tinker update-task <id> --status <status> [--commit <hash>]` | Update task |
 | `tinker delete-task <id>` | Delete a task |
+| `tinker add-tag <task-id> <tag>` | Add tag to task |
+| `tinker remove-tag <task-id> <tag>` | Remove tag from task |
+| `tinker list-tags <task-id>` | List tags for task |
+| `tinker set-tags <task-id> <tag1> [tag2]...` | Replace all tags |
+| `tinker archive [task-id] [--all] [--tags <expr>]` | Archive task(s) |
+| `tinker unarchive <task-id>` | Restore archived task |
 | `tinker snapshot <name>` | Save task state to JSON |
 | `tinker restore <name>` | Restore from snapshot |
 | `tinker sync` | Reconcile with git history |
+| `tinker completion [bash|zsh|fish|powershell]` | Generate shell completions |
 
 Status values: `pending`, `in_progress`, `completed`.
 
@@ -42,6 +49,8 @@ Status values: `pending`, `in_progress`, `completed`.
 - **Task dependencies** - Cycle detection prevents circular references
 - **Git reconciliation** - `sync` resets completed tasks whose commits are no longer in history
 - **Snapshots** - Atomic JSON backups for state preservation
+- **Tags** - Flexible filtering with include/exclude expressions
+- **Archiving** - Hide completed tasks from default listings
 - **Foreign key constraints** - Prevents deletion of dependency targets
 
 ## Architecture

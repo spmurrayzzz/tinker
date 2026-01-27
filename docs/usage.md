@@ -88,6 +88,103 @@ Tinker validates dependencies:
 - No duplicate dependencies
 - No circular dependencies
 
+## Tags
+
+Organize tasks with tags for filtering and categorization.
+
+### Adding Tags
+
+Add a single tag to a task:
+
+```bash
+tinker add-tag 1 feature
+tinker add-tag 1 priority-high
+```
+
+### Removing Tags
+
+Remove a tag from a task:
+
+```bash
+tinker remove-tag 1 feature
+```
+
+### Setting All Tags
+
+Replace all tags on a task:
+
+```bash
+tinker set-tags 1 backend api v2
+```
+
+### Listing Tags
+
+View all tags for a task:
+
+```bash
+tinker list-tags 1
+```
+
+### Filtering by Tags
+
+Use tag expressions when listing tasks:
+
+```bash
+# Must have specific tag
+tinker list-tasks --tags +feature
+
+# Must not have tag
+tinker list-tasks --tags -wip
+
+# Must have one tag but not another
+tinker list-tasks --tags +backend,-wip
+
+# Must have multiple tags
+tinker list-tasks --tags +api,+v2
+```
+
+## Archiving
+
+Archive completed tasks to hide them from default listings.
+
+### Archiving Tasks
+
+Archive a single task:
+
+```bash
+tinker archive 1
+```
+
+Archive all completed tasks:
+
+```bash
+tinker archive --all
+```
+
+Archive completed tasks with specific tags:
+
+```bash
+tinker archive --all --tags +feature
+```
+
+### Unarchiving Tasks
+
+Restore an archived task:
+
+```bash
+tinker unarchive 1
+```
+
+### Viewing Archived Tasks
+
+Include archived tasks in listings:
+
+```bash
+tinker list-tasks --include-archived
+# or
+tinker list-tasks -a
+```
+
 ## Snapshots
 
 Save and restore complete task state for backup or branching workflows.
@@ -148,6 +245,30 @@ tinker update-task 1 --status in_progress
 tinker update-task 1 --status completed --commit $(git rev-parse HEAD)
 ```
 
+### Organizing with Tags
+
+```bash
+tinker add-task "Build login form" -d "Create React component"
+tinker add-tag 1 frontend
+tinker add-tag 1 auth
+
+# Later, filter by tags
+tinker list-tasks --tags +frontend
+```
+
+### Archiving Completed Work
+
+```bash
+# Archive all completed tasks
+tinker archive --all
+
+# Archive only completed tasks tagged as 'feature'
+tinker archive --all --tags +feature
+
+# View archived tasks
+tinker list-tasks --include-archived
+```
+
 ### Creating a Backup Before Risky Changes
 
 ```bash
@@ -191,6 +312,12 @@ tinker completion fish | source
 | `tinker view-task <id>` | Show task details |
 | `tinker update-task <id>` | Update task status |
 | `tinker delete-task <id>` | Delete a task |
+| `tinker add-tag <task-id> <tag>` | Add tag to task |
+| `tinker remove-tag <task-id> <tag>` | Remove tag from task |
+| `tinker list-tags <task-id>` | List tags for task |
+| `tinker set-tags <task-id> <tag1>...` | Replace all tags |
+| `tinker archive [task-id]` | Archive task(s) |
+| `tinker unarchive <task-id>` | Restore archived task |
 | `tinker snapshot <name>` | Save task snapshot |
 | `tinker restore <name>` | Restore from snapshot |
 | `tinker sync` | Reconcile with git history |
