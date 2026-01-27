@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"tinker/internal/config"
@@ -240,4 +241,31 @@ func RestoreSnapshot(ctx *ProjectContext, name string) error {
 	}
 
 	return nil
+}
+
+func ParseTagExpression(expr string) (include, exclude []string, err error) {
+	if expr == "" {
+		return nil, nil, nil
+	}
+	parts := splitComma(expr)
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		if strings.HasPrefix(p, "-") {
+			tag := strings.TrimPrefix(p, "-")
+			if tag == "" {
+				return nil, nil, fmt.Errorf("empty exclude tag")
+			}
+			exclude = append(exclude, tag)
+		} else {
+			tag := strings.TrimPrefix(p, "+")
+			if tag == "" {
+				return nil, nil, fmt.Errorf("empty include tag")
+			}
+			include = append(include, tag)
+		}
+	}
+	return include, exclude, nil
 }

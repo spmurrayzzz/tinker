@@ -339,6 +339,286 @@ func (d *DB) UpdateTaskStatusAndCommit(id int64, status model.TaskStatus, commit
 	return nil
 }
 
+func (d *DB) AddTag(id int64, tag string) error {
+	var tagsJSON string
+	err := d.QueryRow("SELECT tags FROM tasks WHERE id = ?", id).Scan(&tagsJSON)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("task not found: %d", id)
+		}
+		return fmt.Errorf("get tags: %w", err)
+	}
+	tags, err := TagsFromJSON(tagsJSON)
+	if err != nil {
+		return fmt.Errorf("parse tags: %w", err)
+	}
+	for _, t := range tags {
+		if t == tag {
+			return nil
+		}
+	}
+	tags = append(tags, tag)
+	newJSON, err := TagsToJSON(tags)
+	if err != nil {
+		return fmt.Errorf("serialize tags: %w", err)
+	}
+	res, err := d.Exec(`UPDATE tasks SET tags = ?, updated_at = ? WHERE id = ?`,
+		newJSON, time.Now().Unix(), id)
+	if err != nil {
+		return fmt.Errorf("update tags: %w", err)
+	}
+	rows, _ := res.RowsAffected()
+	if rows == 0 {
+		return fmt.Errorf("task not found: %d", id)
+	}
+	return nil
+}
+
+func (d *DB) RemoveTag(id int64, tag string) error {
+	var tagsJSON string
+	err := d.QueryRow("SELECT tags FROM tasks WHERE id = ?", id).Scan(&tagsJSON)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("task not found: %d", id)
+		}
+		return fmt.Errorf("get tags: %w", err)
+	}
+	tags, err := TagsFromJSON(tagsJSON)
+	if err != nil {
+		return fmt.Errorf("parse tags: %w", err)
+	}
+	var newTags []string
+	for _, t := range tags {
+		if t != tag {
+			newTags = append(newTags, t)
+		}
+	}
+	newJSON, err := TagsToJSON(newTags)
+	if err != nil {
+		return fmt.Errorf("serialize tags: %w", err)
+	}
+	res, err := d.Exec(`UPDATE tasks SET tags = ?, updated_at = ? WHERE id = ?`,
+		newJSON, time.Now().Unix(), id)
+	if err != nil {
+		return fmt.Errorf("update tags: %w", err)
+	}
+	rows, _ := res.RowsAffected()
+	if rows == 0 {
+		return fmt.Errorf("task not found: %d", id)
+	}
+	return nil
+}
+
+func (d *DB) GetTaskTags(id int64) ([]string, error) {
+	var tagsJSON string
+	err := d.QueryRow("SELECT tags FROM tasks WHERE id = ?", id).Scan(&tagsJSON)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get tags: %w", err)
+	}
+	return TagsFromJSON(tagsJSON)
+}
+
+func (d *DB) SetTaskTags(id int64, tags []string) error {
+	tagsJSON, err := TagsToJSON(tags)
+	if err != nil {
+		return fmt.Errorf("serialize tags: %w", err)
+	}
+	res, err := d.Exec(`UPDATE tasks SET tags = ?, updated_at = ? WHERE id = ?`,
+		tagsJSON, time.Now().Unix(), id)
+	if err != nil {
+		return fmt.Errorf("update tags: %w", err)
+	}
+	rows, _ := res.RowsAffected()
+	if rows == 0 {
+		return fmt.Errorf("task not found: %d", id)
+	}
+	return nil
+}
+
+func (d *DB) ArchiveTask(id int64) error {
+	res, err := d.Exec(`UPDATE tasks SET archived = 1, updated_at = ? WHERE id = ?`,
+		time.Now().Unix(), id)
+	if err != nil {
+		return fmt.Errorf("archive task: %w", err)
+	}
+	rows, _ := res.RowsAffected()
+	if rows == 0 {
+		return fmt.Errorf("task not found: %d", id)
+	}
+	return nil
+}
+
+func (d *DB) UnarchiveTask(id int64) error {
+	res, err := d.Exec(`UPDATE tasks SET archived = 0, updated_at = ? WHERE id = ?`,
+		time.Now().Unix(), id)
+	if err != nil {
+		return fmt.Errorf("unarchive task: %w", err)
+	}
+	rows, _ := res.RowsAffected()
+	if rows == 0 {
+		return fmt.Errorf("task not found: %d", id)
+	}
+	return nil
+}
+
+func (d *DB) IsArchived(id int64) (bool, error) {
+	var archived int
+	err := d.QueryRow("SELECT archived FROM tasks WHERE id = ?", id).Scan(&archived)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return false, nil
+		}
+		return false, fmt.Errorf("get archived: %w", err)
+	}
+	return archived != 0, nil
+}
+
+type TaskFilter struct {
+	Status          *model.TaskStatus
+	IncludeTags     []string
+	ExcludeTags     []string
+	IncludeArchived bool
+}
+
+func (d *DB) ListTasksFiltered(filter TaskFilter) ([]model.Task, error) {
+	query := `SELECT id, name, description, status, commit_hash, archived, tags,
+		created_at, updated_at FROM tasks WHERE 1=1`
+	args := []interface{}{}
+
+	if !filter.IncludeArchived {
+		query += " AND archived = 0"
+	}
+	if filter.Status != nil {
+		query += " AND status = ?"
+		args = append(args, *filter.Status)
+	}
+	for _, tag := range filter.IncludeTags {
+		query += ` AND tags LIKE ?`
+		args = append(args, `%"`+tag+`"%`)
+	}
+	for _, tag := range filter.ExcludeTags {
+		query += ` AND tags NOT LIKE ?`
+		args = append(args, `%"`+tag+`"%`)
+	}
+	query += " ORDER BY id ASC"
+
+	rows, err := d.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list tasks filtered: %w", err)
+	}
+	defer rows.Close()
+
+	var tasks []model.Task
+	for rows.Next() {
+		var t model.Task
+		var commitHash sql.NullString
+		var archived int
+		var tagsJSON string
+		err := rows.Scan(&t.ID, &t.Name, &t.Description, &t.Status, &commitHash,
+			&archived, &tagsJSON, &t.CreatedAt, &t.UpdatedAt)
+		if err != nil {
+			return nil, fmt.Errorf("scan task: %w", err)
+		}
+		if commitHash.Valid {
+			t.CommitHash = &commitHash.String
+		}
+		t.Archived = archived != 0
+		tags, err := TagsFromJSON(tagsJSON)
+		if err != nil {
+			return nil, fmt.Errorf("parse tags: %w", err)
+		}
+		t.Tags = tags
+		tasks = append(tasks, t)
+	}
+
+	for i := range tasks {
+		deps, err := d.getDependencies(tasks[i].ID)
+		if err != nil {
+			return nil, err
+		}
+		tasks[i].Dependencies = deps
+	}
+
+	return tasks, nil
+}
+
+func (d *DB) buildFilterWhere(filter TaskFilter) (string, []interface{}) {
+	where := "1=1"
+	args := []interface{}{}
+
+	if !filter.IncludeArchived {
+		where += " AND archived = 0"
+	}
+	if filter.Status != nil {
+		where += " AND status = ?"
+		args = append(args, *filter.Status)
+	}
+	for _, tag := range filter.IncludeTags {
+		where += ` AND tags LIKE ?`
+		args = append(args, `%"`+tag+`"%`)
+	}
+	for _, tag := range filter.ExcludeTags {
+		where += ` AND tags NOT LIKE ?`
+		args = append(args, `%"`+tag+`"%`)
+	}
+	return where, args
+}
+
+func (d *DB) BulkArchive(filter TaskFilter) (int64, error) {
+	where, args := d.buildFilterWhere(filter)
+	args = append([]interface{}{time.Now().Unix()}, args...)
+	query := "UPDATE tasks SET archived = 1, updated_at = ? WHERE " + where
+	res, err := d.Exec(query, args...)
+	if err != nil {
+		return 0, fmt.Errorf("bulk archive: %w", err)
+	}
+	return res.RowsAffected()
+}
+
+func (d *DB) BulkUnarchive(filter TaskFilter) (int64, error) {
+	where, args := d.buildFilterWhere(filter)
+	args = append([]interface{}{time.Now().Unix()}, args...)
+	query := "UPDATE tasks SET archived = 0, updated_at = ? WHERE " + where
+	res, err := d.Exec(query, args...)
+	if err != nil {
+		return 0, fmt.Errorf("bulk unarchive: %w", err)
+	}
+	return res.RowsAffected()
+}
+
+func (d *DB) BulkAddTag(filter TaskFilter, tag string) (int64, error) {
+	tasks, err := d.ListTasksFiltered(filter)
+	if err != nil {
+		return 0, fmt.Errorf("list tasks: %w", err)
+	}
+	var count int64
+	for _, t := range tasks {
+		if err := d.AddTag(t.ID, tag); err != nil {
+			return count, fmt.Errorf("add tag to task %d: %w", t.ID, err)
+		}
+		count++
+	}
+	return count, nil
+}
+
+func (d *DB) BulkRemoveTag(filter TaskFilter, tag string) (int64, error) {
+	tasks, err := d.ListTasksFiltered(filter)
+	if err != nil {
+		return 0, fmt.Errorf("list tasks: %w", err)
+	}
+	var count int64
+	for _, t := range tasks {
+		if err := d.RemoveTag(t.ID, tag); err != nil {
+			return count, fmt.Errorf("remove tag from task %d: %w", t.ID, err)
+		}
+		count++
+	}
+	return count, nil
+}
+
 func (d *DB) DeleteTask(id int64) error {
 	res, err := d.Exec("DELETE FROM tasks WHERE id = ?", id)
 	if err != nil {
