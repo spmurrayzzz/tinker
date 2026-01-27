@@ -18,6 +18,8 @@ type TaskSnapshot struct {
 	Name         string    `json:"name"`
 	Description  string    `json:"description"`
 	Status       string    `json:"status"`
+	Tags         []string  `json:"tags,omitempty"`
+	Archived     bool      `json:"archived"`
 	Dependencies []int64   `json:"dependencies"`
 	CommitHash   *string   `json:"commit_hash,omitempty"`
 	CreatedAt    time.Time `json:"created_at"`

@@ -194,6 +194,8 @@ func SnapshotTasks(ctx *ProjectContext, name string) error {
 			Name:         t.Name,
 			Description:  t.Description,
 			Status:       string(t.Status),
+			Tags:         t.Tags,
+			Archived:     t.Archived,
 			Dependencies: t.Dependencies,
 			CommitHash:   t.CommitHash,
 			CreatedAt:    fromUnix(t.CreatedAt),
@@ -222,12 +224,18 @@ func RestoreSnapshot(ctx *ProjectContext, name string) error {
 
 	tasks := make([]model.TaskWithDeps, len(snap.Tasks))
 	for i, s := range snap.Tasks {
+		tags := s.Tags
+		if tags == nil {
+			tags = []string{}
+		}
 		tasks[i] = model.TaskWithDeps{
 			Task: model.Task{
 				ID:          s.ID,
 				Name:        s.Name,
 				Description: s.Description,
 				Status:      model.TaskStatus(s.Status),
+				Tags:        tags,
+				Archived:    s.Archived,
 				CommitHash:  s.CommitHash,
 				CreatedAt:   toUnix(s.CreatedAt),
 				UpdatedAt:   toUnix(s.UpdatedAt),
