@@ -120,6 +120,15 @@ Update status and link to commits:
   tinker update-task 1 --status in_progress
   tinker update-task 1 --status completed --commit abc123f
 
+### Local Workflow Instructions
+
+Add repo-specific guidance in .tinker/quickstart.md.
+By default, tinker quickstart appends it under a header.
+Set quickstart_mode in ~/.config/tinker/config.json to replace
+and show only the local file. Project config in
+~/.config/tinker/projects/<key>/config.json overrides the
+global value.
+
 ### Task Status Values
 
 - pending      - Work not yet started
