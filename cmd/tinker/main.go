@@ -202,7 +202,33 @@ var quickstartCmd = &cobra.Command{
 	Use:   "quickstart",
 	Short: "Print usage guide",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		fmt.Print(builtInQuickstartPrompt)
+		output := builtInQuickstartPrompt
+		gitRoot, err := git.GitRoot("")
+		if err == nil {
+			localPath := filepath.Join(gitRoot, ".tinker", "quickstart.md")
+			local, err := os.ReadFile(localPath)
+			if err != nil {
+				if !os.IsNotExist(err) {
+					return fmt.Errorf(
+						"read local quickstart file: %w",
+						err,
+					)
+				}
+			} else {
+				output = fmt.Sprintf(
+					"%s\n\n## Local workflow instructions\n\n%s",
+					output,
+					string(local),
+				)
+			}
+		}
+		if !strings.HasSuffix(output, "\n") {
+			output += "\n"
+		}
+		_, err = fmt.Fprint(cmd.OutOrStdout(), output)
+		if err != nil {
+			return fmt.Errorf("write quickstart: %w", err)
+		}
 		return nil
 	},
 }
