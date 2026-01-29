@@ -3,6 +3,7 @@ package commands
 import (
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -209,6 +210,16 @@ func SnapshotTasks(ctx *ProjectContext, name string) error {
 	}
 
 	return nil
+}
+
+func ListSnapshots(ctx *ProjectContext) ([]string, error) {
+	dir := xdg.ProjectSnapshotsDir(ctx.ProjectKey)
+	names, err := snapshot.List(dir)
+	if err != nil {
+		return nil, fmt.Errorf("list snapshots: %w", err)
+	}
+	sort.Strings(names)
+	return names, nil
 }
 
 func RestoreSnapshot(ctx *ProjectContext, name string) error {
