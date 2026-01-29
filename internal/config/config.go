@@ -25,7 +25,11 @@ func ReadGlobalConfig() (*GlobalConfig, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("global config not found at %s", path)
+			return nil, fmt.Errorf(
+				"global config not found at %s: %w",
+				path,
+				err,
+			)
 		}
 		return nil, fmt.Errorf("read global config: %w", err)
 	}
@@ -50,7 +54,11 @@ func ReadProjectConfig(projectKey string) (*ProjectConfig, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("project config not found for %s", projectKey)
+			return nil, fmt.Errorf(
+				"project config not found for %s: %w",
+				projectKey,
+				err,
+			)
 		}
 		return nil, fmt.Errorf("read project config: %w", err)
 	}
@@ -98,4 +106,18 @@ func atomicWrite(path string, data []byte, perm os.FileMode) error {
 		return fmt.Errorf("close temp: %w", err)
 	}
 	return os.Rename(tmpPath, path)
+}
+
+func normalizeQuickstartMode(mode string) (string, error) {
+	switch mode {
+	case "":
+		return "", nil
+	case "append", "replace":
+		return mode, nil
+	default:
+		return "", fmt.Errorf(
+			"invalid quickstart_mode %q (allowed: append, replace)",
+			mode,
+		)
+	}
 }
