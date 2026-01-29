@@ -223,6 +223,12 @@ tinker restore before-refactor
 
 Restoring deletes all existing tasks and restores from the snapshot. Task IDs are preserved.
 
+### Listing Snapshots
+
+```bash
+tinker list-snapshots
+```
+
 ## Git Integration
 
 Tinker integrates with git for commit tracking and history reconciliation.
