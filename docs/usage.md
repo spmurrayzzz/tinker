@@ -13,6 +13,17 @@ tinker init --path /path/to/repo  # Initialize in specific directory
 
 This creates project-specific storage under your XDG config and data directories.
 
+## Quickstart Guidance
+
+`tinker quickstart` prints the built-in workflow prompt. If your repo contains
+`.tinker/quickstart.md`, that file is appended under a
+"Local workflow instructions" header.
+
+To replace the built-in prompt, set `quickstart_mode` to `replace` in either
+`~/.config/tinker/config.json` or
+`~/.config/tinker/projects/<key>/config.json`. Project config overrides global
+config.
+
 ## Task Management
 
 ### Adding Tasks

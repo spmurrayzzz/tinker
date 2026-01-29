@@ -43,6 +43,17 @@ tinker list-tasks
 
 Status values: `pending`, `in_progress`, `completed`.
 
+## Quickstart Customization
+
+`tinker quickstart` prints the built-in workflow prompt. If a repo includes
+`.tinker/quickstart.md`, that file is appended under a
+"Local workflow instructions" header.
+
+To replace the built-in prompt entirely, set `quickstart_mode` to `replace` in
+either `~/.config/tinker/config.json` or
+`~/.config/tinker/projects/<key>/config.json`. Project config overrides global
+config.
+
 ## Features
 
 - **SQLite persistence** - Local storage with WAL mode
