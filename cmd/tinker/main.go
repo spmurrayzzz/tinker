@@ -94,6 +94,8 @@ var initCmd = &cobra.Command{
 		}
 		defer db.Close()
 
+		fmt.Printf("Initialized tinker project in git repository: %s\n", gitRoot)
+
 		return nil
 	},
 }
