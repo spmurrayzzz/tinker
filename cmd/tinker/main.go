@@ -777,7 +777,7 @@ var listSnapshotsCmd = &cobra.Command{
 
 		names, err := commands.ListSnapshots(ctx)
 		if err != nil {
-			return fmt.Errorf("list snapshots: %w", err)
+			return err
 		}
 
 		for _, name := range names {
