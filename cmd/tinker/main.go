@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -15,6 +16,7 @@ import (
 	"tinker/internal/git"
 	"tinker/internal/model"
 	"tinker/internal/project"
+	"tinker/internal/snapshot"
 	"tinker/internal/xdg"
 )
 
@@ -760,6 +762,30 @@ var restoreCmd = &cobra.Command{
 			return fmt.Errorf("restore snapshot: %w", err)
 		}
 
+		return nil
+	},
+}
+
+var listSnapshotsCmd = &cobra.Command{
+	Use:   "list-snapshots",
+	Short: "List snapshots",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx, err := commands.ResolveProject()
+		if err != nil {
+			return err
+		}
+		defer ctx.DB.Close()
+
+		snapshotsDir := xdg.ProjectSnapshotsDir(ctx.ProjectKey)
+		names, err := snapshot.List(snapshotsDir)
+		if err != nil {
+			return fmt.Errorf("list snapshots: %w", err)
+		}
+		sort.Strings(names)
+
+		for _, name := range names {
+			fmt.Println(name)
+		}
 		return nil
 	},
 }
