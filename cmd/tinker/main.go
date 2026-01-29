@@ -189,6 +189,7 @@ This checks each completed task's commit hash against current HEAD ancestry.
 Save and restore complete task state:
   tinker snapshot before-refactor
   tinker restore before-refactor
+  tinker list-snapshots
 
 Snapshots are atomic JSON files stored per-project.
 
