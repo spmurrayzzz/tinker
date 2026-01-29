@@ -10,14 +10,16 @@ import (
 )
 
 type GlobalConfig struct {
-	Version int `json:"version"`
-	IDWidth int `json:"id_width"`
+	Version        int    `json:"version"`
+	IDWidth        int    `json:"id_width"`
+	QuickstartMode string `json:"quickstart_mode"`
 }
 
 type ProjectConfig struct {
-	Version    int    `json:"version"`
-	ProjectKey string `json:"project_key"`
-	GitRoot    string `json:"git_root"`
+	Version        int    `json:"version"`
+	ProjectKey     string `json:"project_key"`
+	GitRoot        string `json:"git_root"`
+	QuickstartMode string `json:"quickstart_mode"`
 }
 
 func ReadGlobalConfig() (*GlobalConfig, error) {
