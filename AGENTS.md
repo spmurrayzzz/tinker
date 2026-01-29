@@ -34,9 +34,11 @@ Produces the `tinker` binary in the repo root. No preconditions required. Clean 
 ### Run Tests
 ```bash
 make test
-# Or: go test ./internal/... -v
+# Or: go test ./... -v
 ```
-Runs all unit tests in `internal/` packages. Tests use standard library `testing` package. No database or external dependencies required for unit tests.
+Runs unit tests across all packages (including `cmd/tinker`). Tests use the
+standard library `testing` package. No database or external dependencies
+required for unit tests.
 
 ### Linting and Formatting
 ```bash

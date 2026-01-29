@@ -51,8 +51,16 @@ Status values: `pending`, `in_progress`, `completed`.
 
 To replace the built-in prompt entirely, set `quickstart_mode` to `replace` in
 either `~/.config/tinker/config.json` or
-`~/.config/tinker/projects/<key>/config.json`. Project config overrides global
-config.
+`~/.config/tinker/projects/<key>/config.json`.
+
+Valid values:
+
+- `append` (default)
+- `replace`
+
+Project config overrides global config. If `replace` is set but
+`.tinker/quickstart.md` is missing, `tinker quickstart` falls back to the
+built-in prompt.
 
 ## Features
 
