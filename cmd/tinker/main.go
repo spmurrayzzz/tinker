@@ -235,10 +235,36 @@ var quickstartCmd = &cobra.Command{
 	Use:   "quickstart",
 	Short: "Print usage guide",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		output := builtInQuickstartPrompt
+		mode := "append"
+		cfg, err := config.ReadGlobalConfig()
+		if err == nil {
+			if cfg.QuickstartMode != "" {
+				mode = cfg.QuickstartMode
+			}
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("read global config: %w", err)
+		}
+
 		localContents := ""
 		gitRoot, err := git.GitRoot("")
 		if err == nil {
+			canonical, err := git.CanonicalPath(gitRoot)
+			if err != nil {
+				return fmt.Errorf("canonicalize git root: %w", err)
+			}
+			projectKey, err := project.DeriveKey(canonical)
+			if err != nil {
+				return fmt.Errorf("derive project key: %w", err)
+			}
+			projectCfg, err := config.ReadProjectConfig(projectKey)
+			if err == nil {
+				if projectCfg.QuickstartMode != "" {
+					mode = projectCfg.QuickstartMode
+				}
+			} else if !errors.Is(err, os.ErrNotExist) {
+				return fmt.Errorf("read project config: %w", err)
+			}
+
 			localPath := filepath.Join(gitRoot, ".tinker", "quickstart.md")
 			local, err := os.ReadFile(localPath)
 			if err != nil {
@@ -252,9 +278,9 @@ var quickstartCmd = &cobra.Command{
 				localContents = string(local)
 			}
 		}
-		output = composeQuickstart(
+		output := composeQuickstart(
 			builtInQuickstartPrompt,
-			"append",
+			mode,
 			localContents,
 		)
 		if !strings.HasSuffix(output, "\n") {

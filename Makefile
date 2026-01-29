@@ -6,7 +6,7 @@ build:
 	go build -o tinker ./cmd/tinker
 
 test:
-	go test ./internal/... -v
+	go test ./... -v
 
 format:
 	go fmt ./...
