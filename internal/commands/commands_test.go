@@ -1,9 +1,12 @@
 package commands
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"tinker/internal/xdg"
 )
 
 func TestParseTagExpression(t *testing.T) {
@@ -134,4 +137,54 @@ func TestSplitComma(t *testing.T) {
 		got := splitComma(tt.input)
 		assert.Equal(t, tt.want, got)
 	}
+}
+
+func TestListSnapshots_SortsAndFilters(t *testing.T) {
+	originalDataHome := xdg.DataHome
+	xdg.DataHome = t.TempDir()
+	t.Cleanup(func() {
+		xdg.DataHome = originalDataHome
+	})
+
+	projectKey := "test-project"
+	snapshotDir := xdg.ProjectSnapshotsDir(projectKey)
+
+	err := os.MkdirAll(snapshotDir, 0700)
+	assert.NoError(t, err)
+
+	files := []string{
+		filepath.Join(snapshotDir, "b.json"),
+		filepath.Join(snapshotDir, "a.json"),
+		filepath.Join(snapshotDir, "ignore.txt"),
+	}
+
+	for _, path := range files {
+		assert.NoError(t, os.WriteFile(path, []byte("{}"), 0600))
+	}
+
+	subdir := filepath.Join(snapshotDir, "subdir")
+	assert.NoError(t, os.MkdirAll(subdir, 0700))
+	assert.NoError(t, os.WriteFile(
+		filepath.Join(subdir, "c.json"),
+		[]byte("{}"),
+		0600,
+	))
+
+	ctx := &ProjectContext{ProjectKey: projectKey}
+	got, err := ListSnapshots(ctx)
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"a", "b"}, got)
+}
+
+func TestListSnapshots_EmptyWhenDirMissing(t *testing.T) {
+	originalDataHome := xdg.DataHome
+	xdg.DataHome = t.TempDir()
+	t.Cleanup(func() {
+		xdg.DataHome = originalDataHome
+	})
+
+	ctx := &ProjectContext{ProjectKey: "test-project"}
+	got, err := ListSnapshots(ctx)
+	assert.NoError(t, err)
+	assert.Empty(t, got)
 }
