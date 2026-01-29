@@ -88,11 +88,7 @@ var initCmd = &cobra.Command{
 	},
 }
 
-var quickstartCmd = &cobra.Command{
-	Use:   "quickstart",
-	Short: "Print usage guide",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		fmt.Print(`## Task Management with tinker
+const builtInQuickstartPrompt = `## Task Management with tinker
 
 tinker is a dependency-aware task manager designed for git-integrated workflows.
 Each git repository gets isolated storage, and completed tasks can be linked to
@@ -200,7 +196,13 @@ Each git repository is identified by a unique project key derived from its path.
   tinker completion bash > /etc/bash_completion.d/tinker
   tinker completion zsh > "${fpath[1]}/_tinker"
   tinker completion fish > ~/.config/fish/completions/tinker.fish
-`)
+`
+
+var quickstartCmd = &cobra.Command{
+	Use:   "quickstart",
+	Short: "Print usage guide",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		fmt.Print(builtInQuickstartPrompt)
 		return nil
 	},
 }
