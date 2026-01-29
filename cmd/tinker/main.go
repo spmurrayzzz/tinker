@@ -207,11 +207,26 @@ Each git repository is identified by a unique project key derived from its path.
   tinker completion fish > ~/.config/fish/completions/tinker.fish
 `
 
+func composeQuickstart(builtIn, mode, local string) string {
+	if mode == "replace" && local != "" {
+		return local
+	}
+	if local == "" {
+		return builtIn
+	}
+	return fmt.Sprintf(
+		"%s\n\n## Local workflow instructions\n\n%s",
+		builtIn,
+		local,
+	)
+}
+
 var quickstartCmd = &cobra.Command{
 	Use:   "quickstart",
 	Short: "Print usage guide",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		output := builtInQuickstartPrompt
+		localContents := ""
 		gitRoot, err := git.GitRoot("")
 		if err == nil {
 			localPath := filepath.Join(gitRoot, ".tinker", "quickstart.md")
@@ -224,13 +239,14 @@ var quickstartCmd = &cobra.Command{
 					)
 				}
 			} else {
-				output = fmt.Sprintf(
-					"%s\n\n## Local workflow instructions\n\n%s",
-					output,
-					string(local),
-				)
+				localContents = string(local)
 			}
 		}
+		output = composeQuickstart(
+			builtInQuickstartPrompt,
+			"append",
+			localContents,
+		)
 		if !strings.HasSuffix(output, "\n") {
 			output += "\n"
 		}
