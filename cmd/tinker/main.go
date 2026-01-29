@@ -387,6 +387,11 @@ var listTasksCmd = &cobra.Command{
 		for _, t := range tasks {
 			fmt.Printf("%0*d %s %s\n", ctx.IDWidth, t.ID, t.Status, t.Name)
 		}
+
+		if len(tasks) == 0 {
+			fmt.Println("No tasks found")
+		}
+
 		return nil
 	},
 }
