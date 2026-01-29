@@ -36,6 +36,7 @@ tinker list-tasks
 | `tinker archive [task-id] [--all] [--tags <expr>]` | Archive task(s) |
 | `tinker unarchive <task-id>` | Restore archived task |
 | `tinker snapshot <name>` | Save task state to JSON |
+| `tinker list-snapshots` | List snapshot names |
 | `tinker restore <name>` | Restore from snapshot |
 | `tinker sync` | Reconcile with git history |
 | `tinker reset [--force] [--keep-snapshots]` | Reset project (delete all tasks) |
