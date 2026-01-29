@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -70,10 +71,19 @@ var initCmd = &cobra.Command{
 			}
 		}
 
+		quickstartMode := ""
+		projectCfg, err := config.ReadProjectConfig(projectKey)
+		if err == nil {
+			quickstartMode = projectCfg.QuickstartMode
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("read project config: %w", err)
+		}
+
 		if err := config.WriteProjectConfig(&config.ProjectConfig{
-			Version:    1,
-			ProjectKey: projectKey,
-			GitRoot:    canonical,
+			Version:        1,
+			ProjectKey:     projectKey,
+			GitRoot:        canonical,
+			QuickstartMode: quickstartMode,
 		}); err != nil {
 			return fmt.Errorf("write project config: %w", err)
 		}
