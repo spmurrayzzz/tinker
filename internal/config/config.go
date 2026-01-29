@@ -39,6 +39,11 @@ func ReadGlobalConfig() (*GlobalConfig, error) {
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("parse global config: %w", err)
 	}
+	mode, err := normalizeQuickstartMode(cfg.QuickstartMode)
+	if err != nil {
+		return nil, fmt.Errorf("validate global config: %w", err)
+	}
+	cfg.QuickstartMode = mode
 	return &cfg, nil
 }
 
@@ -68,6 +73,11 @@ func ReadProjectConfig(projectKey string) (*ProjectConfig, error) {
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("parse project config: %w", err)
 	}
+	mode, err := normalizeQuickstartMode(cfg.QuickstartMode)
+	if err != nil {
+		return nil, fmt.Errorf("validate project config: %w", err)
+	}
+	cfg.QuickstartMode = mode
 	return &cfg, nil
 }
 
