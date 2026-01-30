@@ -188,3 +188,36 @@ func TestListSnapshots_EmptyWhenDirMissing(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Empty(t, got)
 }
+
+func TestParseIDExpression(t *testing.T) {
+	tests := []struct {
+		name     string
+		expr     string
+		expected []int64
+		wantErr  bool
+	}{
+		{"single unpadded", "5", []int64{5}, false},
+		{"single padded", "00005", []int64{5}, false},
+		{"comma list", "1,3,5", []int64{1, 3, 5}, false},
+		{"simple range", "1-3", []int64{1, 2, 3}, false},
+		{"padded range", "00001-00003", []int64{1, 2, 3}, false},
+		{"mixed", "1,3-5,10", []int64{1, 3, 4, 5, 10}, false},
+		{"complex mixed", "1,3,5-10,15,20-22", []int64{1, 3, 5, 6, 7, 8, 9, 10, 15, 20, 21, 22}, false},
+		{"overlapping ranges", "1-5,3-7", []int64{1, 2, 3, 4, 5, 6, 7}, false},
+		{"empty", "", nil, true},
+		{"invalid range", "5-1", nil, true},
+		{"invalid id", "abc", nil, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ParseIDExpression(tt.expr)
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expected, got)
+		})
+	}
+}

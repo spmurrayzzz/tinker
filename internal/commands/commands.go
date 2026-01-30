@@ -288,3 +288,51 @@ func ParseTagExpression(expr string) (include, exclude []string, err error) {
 	}
 	return include, exclude, nil
 }
+
+func ParseIDExpression(expr string) ([]int64, error) {
+	if expr == "" {
+		return nil, fmt.Errorf("empty expression")
+	}
+
+	parts := splitComma(expr)
+	seen := make(map[int64]bool)
+
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+
+		if strings.Contains(part, "-") {
+			rangeParts := strings.SplitN(part, "-", 2)
+			start, err := ParseTaskID(rangeParts[0])
+			if err != nil {
+				return nil, fmt.Errorf("invalid range start %q: %w", rangeParts[0], err)
+			}
+			end, err := ParseTaskID(rangeParts[1])
+			if err != nil {
+				return nil, fmt.Errorf("invalid range end %q: %w", rangeParts[1], err)
+			}
+			if start > end {
+				return nil, fmt.Errorf("invalid range %d-%d: start > end", start, end)
+			}
+			for id := start; id <= end; id++ {
+				seen[id] = true
+			}
+		} else {
+			id, err := ParseTaskID(part)
+			if err != nil {
+				return nil, fmt.Errorf("invalid id %q: %w", part, err)
+			}
+			seen[id] = true
+		}
+	}
+
+	var ids []int64
+	for id := range seen {
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+
+	return ids, nil
+}
