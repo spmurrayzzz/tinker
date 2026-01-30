@@ -20,6 +20,13 @@ type DB struct {
 	idWidth    int
 }
 
+// BulkUpdateResult contains per-task results
+type BulkUpdateResult struct {
+	Updated  []int64 // Successfully updated
+	NotFound []int64 // IDs that don't exist in DB
+	Failed   []int64 // DB errors (shouldn't happen with FK constraints)
+}
+
 func Open(projectKey string) (*DB, error) {
 	dbPath := filepath.Join(xdg.ProjectDataDir(projectKey), "tasks.db")
 	if err := xdg.EnsureDir(filepath.Dir(dbPath)); err != nil {
@@ -337,6 +344,63 @@ func (d *DB) UpdateTaskStatusAndCommit(id int64, status model.TaskStatus, commit
 		return fmt.Errorf("update task: %w", err)
 	}
 	return nil
+}
+
+// UpdateTasksStatusAndCommit updates multiple tasks in a single transaction
+// Each task updated individually to know which succeeded/failed
+// Commit hash can be nil (clears existing) or pointer (sets)
+func (d *DB) UpdateTasksStatusAndCommit(ids []int64, status model.TaskStatus, commitHash *string) (*BulkUpdateResult, error) {
+	tx, err := d.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	result := &BulkUpdateResult{
+		Updated:  make([]int64, 0),
+		NotFound: make([]int64, 0),
+		Failed:   make([]int64, 0),
+	}
+
+	now := time.Now().Unix()
+
+	for _, id := range ids {
+		// Check if task exists
+		var exists int
+		err := tx.QueryRow("SELECT 1 FROM tasks WHERE id = ?", id).Scan(&exists)
+		if err == sql.ErrNoRows {
+			result.NotFound = append(result.NotFound, id)
+			continue
+		}
+		if err != nil {
+			return nil, fmt.Errorf("check task exists for id %d: %w", id, err)
+		}
+
+		// Execute update
+		var updateErr error
+		if commitHash == nil {
+			_, updateErr = tx.Exec(`
+				UPDATE tasks SET status = ?, commit_hash = NULL, updated_at = ?
+				WHERE id = ?
+			`, status, now, id)
+		} else {
+			_, updateErr = tx.Exec(`
+				UPDATE tasks SET status = ?, commit_hash = ?, updated_at = ?
+				WHERE id = ?
+			`, status, *commitHash, now, id)
+		}
+		if updateErr != nil {
+			return nil, fmt.Errorf("update task %d: %w", id, updateErr)
+		}
+
+		result.Updated = append(result.Updated, id)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit tx: %w", err)
+	}
+
+	return result, nil
 }
 
 func (d *DB) AddTag(id int64, tag string) error {
