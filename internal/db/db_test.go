@@ -498,3 +498,67 @@ func TestCreateAndRenameSnapshotFile(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "test content", string(content))
 }
+
+func TestUpdateTasksStatusAndCommit(t *testing.T) {
+	db := setupTestDB(t)
+
+	id1, err := db.InsertTask("task1", "desc1", model.StatusPending, nil)
+	require.NoError(t, err)
+	id2, err := db.InsertTask("task2", "desc2", model.StatusPending, nil)
+	require.NoError(t, err)
+	id3, err := db.InsertTask("task3", "desc3", model.StatusPending, nil)
+	require.NoError(t, err)
+
+	result, err := db.UpdateTasksStatusAndCommit([]int64{id1, id2}, model.StatusCompleted, nil)
+	require.NoError(t, err)
+	assert.Equal(t, []int64{id1, id2}, result.Updated)
+	assert.Empty(t, result.NotFound)
+	assert.Empty(t, result.Failed)
+
+	task1, err := db.GetTask(id1)
+	require.NoError(t, err)
+	assert.Equal(t, model.StatusCompleted, task1.Status)
+
+	task2, err := db.GetTask(id2)
+	require.NoError(t, err)
+	assert.Equal(t, model.StatusCompleted, task2.Status)
+
+	task3, err := db.GetTask(id3)
+	require.NoError(t, err)
+	assert.Equal(t, model.StatusPending, task3.Status)
+
+	result, err = db.UpdateTasksStatusAndCommit([]int64{id1, id2, 999}, model.StatusPending, nil)
+	require.NoError(t, err)
+	assert.Equal(t, []int64{id1, id2}, result.Updated)
+	assert.Equal(t, []int64{999}, result.NotFound)
+	assert.Empty(t, result.Failed)
+
+	task1, err = db.GetTask(id1)
+	require.NoError(t, err)
+	assert.Equal(t, model.StatusPending, task1.Status)
+
+	result, err = db.UpdateTasksStatusAndCommit([]int64{999, 1000}, model.StatusInProgress, nil)
+	require.NoError(t, err)
+	assert.Empty(t, result.Updated)
+	assert.Equal(t, []int64{999, 1000}, result.NotFound)
+	assert.Empty(t, result.Failed)
+
+	commitHash := "abc123"
+	result, err = db.UpdateTasksStatusAndCommit([]int64{id1}, model.StatusCompleted, &commitHash)
+	require.NoError(t, err)
+	assert.Equal(t, []int64{id1}, result.Updated)
+
+	task1, err = db.GetTask(id1)
+	require.NoError(t, err)
+	assert.Equal(t, model.StatusCompleted, task1.Status)
+	require.NotNil(t, task1.CommitHash)
+	assert.Equal(t, "abc123", *task1.CommitHash)
+
+	result, err = db.UpdateTasksStatusAndCommit([]int64{id1}, model.StatusPending, nil)
+	require.NoError(t, err)
+	assert.Equal(t, []int64{id1}, result.Updated)
+
+	task1, err = db.GetTask(id1)
+	require.NoError(t, err)
+	assert.Nil(t, task1.CommitHash)
+}
