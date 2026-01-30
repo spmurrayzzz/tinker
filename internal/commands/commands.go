@@ -1,7 +1,9 @@
 package commands
 
 import (
+	"bufio"
 	"fmt"
+	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -335,4 +337,29 @@ func ParseIDExpression(expr string) ([]int64, error) {
 	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
 
 	return ids, nil
+}
+
+// ConfirmBulkUpdate prompts for confirmation when count > threshold
+// Returns error if user declines
+func ConfirmBulkUpdate(count int, force bool) error {
+	if force {
+		return nil
+	}
+	if count <= 3 {
+		return nil
+	}
+
+	fmt.Printf("Update %d tasks? [y/N] ", count)
+	reader := bufio.NewReader(os.Stdin)
+	input, err := reader.ReadString('\n')
+	if err != nil {
+		return fmt.Errorf("read input: %w", err)
+	}
+
+	input = strings.TrimSpace(input)
+	if input == "y" || input == "Y" {
+		return nil
+	}
+
+	return fmt.Errorf("operation cancelled")
 }
