@@ -27,7 +27,7 @@ tinker list-tasks
 | `tinker add-task <name> [--description] [--depends-on <ids>]` | Add a new task |
 | `tinker list-tasks [--status <status>] [--tags <expr>] [--include-archived]` | List all tasks |
 | `tinker view-task <id>` | Show task details |
-| `tinker update-task <id> --status <status> [--commit <hash>]` | Update task |
+| `tinker update-task <id-expr> --status <status> [--commit <hash>]` | Update task(s) |
 | `tinker delete-task <id>` | Delete a task |
 | `tinker add-tag <task-id> <tag>` | Add tag to task |
 | `tinker remove-tag <task-id> <tag>` | Remove tag from task |
@@ -72,6 +72,7 @@ built-in prompt.
 - **Snapshots** - Atomic JSON backups for state preservation
 - **Tags** - Flexible filtering with include/exclude expressions
 - **Archiving** - Hide completed tasks from default listings
+- **Bulk operations** - Update multiple tasks using ID expressions (ranges, lists, wildcards)
 - **Foreign key constraints** - Prevents deletion of dependency targets
 
 ## Architecture

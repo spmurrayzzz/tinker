@@ -83,6 +83,55 @@ tinker update-task 1 --status completed --commit abc1234
 
 Status values: `pending`, `in_progress`, `completed`
 
+#### Bulk Updates with ID Expressions
+
+Update multiple tasks at once using ID expressions:
+
+```bash
+# Single task
+tinker update-task 1 --status completed
+
+# Multiple specific tasks
+tinker update-task 1,3,5 --status completed
+
+# Range of tasks
+tinker update-task 1-5 --status in_progress
+
+# Mixed expression (singles and ranges)
+tinker update-task 1,3,5-10,15 --status completed
+```
+
+**ID Expression Syntax:**
+- Single ID: `5` or `00005` (zero-padding accepted)
+- Comma-separated list: `1,3,5`
+- Range: `1-5` (inclusive)
+- Mixed: `1,3,5-10,15,20-22`
+- Overlapping ranges are automatically deduplicated
+
+**Bulk Confirmation:**
+When updating more than 3 tasks, tinker prompts for confirmation:
+
+```bash
+$ tinker update-task 1-10 --status completed
+Update 10 tasks? [y/N]
+```
+
+Use `--force` to skip the confirmation:
+
+```bash
+tinker update-task 1-10 --status completed --force
+```
+
+**Results:**
+After a bulk update, tinker reports per-task results:
+```
+updated: 1
+updated: 2
+updated: 3
+...
+skipped: 99 (not found)
+```
+
 ### Deleting Tasks
 
 Remove a task from the project:
@@ -352,7 +401,7 @@ tinker completion fish | source
 | `tinker add-task <name>` | Add a new task |
 | `tinker list-tasks` | List all tasks |
 | `tinker view-task <id>` | Show task details |
-| `tinker update-task <id>` | Update task status |
+| `tinker update-task <id-expr>` | Update task status |
 | `tinker delete-task <id>` | Delete a task |
 | `tinker add-tag <task-id> <tag>` | Add tag to task |
 | `tinker remove-tag <task-id> <tag>` | Remove tag from task |

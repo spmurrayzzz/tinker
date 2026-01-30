@@ -113,6 +113,19 @@ Project key is derived from git toplevel path: the absolute canonical path with 
 ### Command Handlers
 `internal/commands/commands.go` - Contains `ResolveProject()`, `ParseTaskID()`, `ValidateDependsOn()`, `CheckDeleteProtection()`, `SyncTasks()`, `SnapshotTasks()`, `RestoreSnapshot()`, and `FormatTime()`.
 
+### ID Expression Parsing
+`internal/commands/commands.go:294-340` - `ParseIDExpression()` supports bulk operations on multiple tasks:
+- **Single ID**: `5` or `00005` (zero-padding normalized)
+- **Comma-separated list**: `1,3,5` (multiple individual IDs)
+- **Range**: `1-3` or `00001-00003` (inclusive ranges)
+- **Mixed expressions**: `1,3-5,10` (combination of singles and ranges)
+- **Overlapping ranges**: `1-5,3-7` automatically deduplicated to `1,2,3,4,5,6,7`
+- Results always sorted in ascending order
+- Used by `update-task` for bulk status/commit updates
+
+### Bulk Operations
+The `update-task` command supports bulk operations via ID expressions. When updating >3 tasks, a confirmation prompt is shown (use `--force` to skip). Bulk updates are performed atomically in a single database transaction.
+
 ## Validation Pipeline
 
 The `make validate` target runs the complete check sequence: `format` → `vet` → `test`. All three must pass for code to be considered valid.
@@ -135,7 +148,7 @@ The `make validate` target runs the complete check sequence: `format` → `vet` 
 
 2. **DB close behavior**: `DB.Close()` in `internal/db/db.go:763-769` runs `PRAGMA wal_checkpoint(TRUNCATE)` before closing to ensure clean shutdown.
 
-3. **Task ID parsing**: `commands.ParseTaskID()` in `internal/commands/commands.go` accepts zero-padded IDs (e.g., "00001") and converts to int64.
+3. **Task ID parsing**: `commands.ParseTaskID()` in `internal/commands/commands.go` accepts zero-padded IDs (e.g., "00001") and converts to int64. `ParseIDExpression()` extends this to support ranges and lists for bulk operations.
 
 4. **Dependency validation**: `ValidateDependsOn()` checks for self-dependency, duplicate dependencies, and cycle detection before allowing insert.
 
