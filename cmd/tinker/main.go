@@ -458,23 +458,24 @@ var viewTaskCmd = &cobra.Command{
 }
 
 var updateTaskCmd = &cobra.Command{
-	Use:   "update-task <id> --status <status> [--commit <hash>]",
+	Use:   "update-task <id-expr> --status <status> [--commit <hash>] [--force]",
 	Short: "Update task status and/or commit",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if len(args) < 1 {
-			return fmt.Errorf("missing task id")
+			return fmt.Errorf("missing task id expression")
 		}
 
-		id, err := commands.ParseTaskID(args[0])
+		expr := strings.Join(args, ",")
+
+		ids, err := commands.ParseIDExpression(expr)
 		if err != nil {
-			return fmt.Errorf("invalid task id: %w", err)
+			return fmt.Errorf("invalid id expression: %w", err)
 		}
 
 		statusStr, _ := cmd.Flags().GetString("status")
 		if statusStr == "" {
 			return fmt.Errorf("status is required")
 		}
-
 		status, err := model.ParseTaskStatus(statusStr)
 		if err != nil {
 			return fmt.Errorf("invalid status: %w", err)
@@ -489,14 +490,28 @@ var updateTaskCmd = &cobra.Command{
 			commitHash = &hash
 		}
 
+		force, _ := cmd.Flags().GetBool("force")
+
 		ctx, err := commands.ResolveProject()
 		if err != nil {
 			return err
 		}
 		defer ctx.DB.Close()
 
-		if err := ctx.DB.UpdateTaskStatusAndCommit(id, status, commitHash); err != nil {
-			return fmt.Errorf("update task: %w", err)
+		if err := commands.ConfirmBulkUpdate(len(ids), force); err != nil {
+			return err
+		}
+
+		result, err := ctx.DB.UpdateTasksStatusAndCommit(ids, status, commitHash)
+		if err != nil {
+			return fmt.Errorf("bulk update failed: %w", err)
+		}
+
+		for _, id := range result.Updated {
+			fmt.Printf("updated: %0*d\n", ctx.IDWidth, id)
+		}
+		for _, id := range result.NotFound {
+			fmt.Printf("skipped: %0*d (not found)\n", ctx.IDWidth, id)
 		}
 
 		return nil
@@ -1027,6 +1042,7 @@ func init() {
 
 	updateTaskCmd.Flags().StringP("status", "s", "", "Task status (pending, in_progress, completed)")
 	updateTaskCmd.Flags().StringP("commit", "c", "", "Commit hash")
+	updateTaskCmd.Flags().BoolP("force", "f", false, "Skip confirmation for bulk updates")
 
 	archiveCmd.Flags().Bool("all", false, "Archive all completed tasks")
 	archiveCmd.Flags().String("tags", "", "Tag expression for --all: +tag (must have), -tag (must not have)")
